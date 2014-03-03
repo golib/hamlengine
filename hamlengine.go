@@ -5,13 +5,15 @@ import (
   "io/ioutil"
   "log"
   "fmt"
+  "strings"
+  "path/filepath"
   "html/template"
   "github.com/golib/revel"
   "github.com/realistschuckle/gohaml"
 )
 
 func init() {
-  revel.RegisterTemplateEnginer('haml', revel.TemplateEnginer(new(hamlTemplateEngine)))
+  revel.RegisterTemplateEnginer("haml", revel.TemplateEnginer(new(hamlTemplateEngine)))
 }
 
 type hamlTemplateEngine struct {
@@ -19,12 +21,12 @@ type hamlTemplateEngine struct {
 }
 
 func (haml *hamlTemplateEngine) Refresh() *revel.Error {
-  paths = haml.Paths()
+  paths := haml.Paths()
 
-  TRACE.Printf("Refreshing templates from %s", paths)
+  revel.TRACE.Printf("Refreshing templates from %s", paths)
 
-  compileError := nil
-  templatePaths := map[string]string{}
+  var compileError *revel.Error
+  var templatePaths map[string]string
 
   // Set the template delimiters for the project if present, then split into left
   // and right delimiters around a space character
@@ -88,8 +90,8 @@ func (haml *hamlTemplateEngine) Refresh() *revel.Error {
             return nil
           }
 
-
-          fileStr = gohaml.NewEngine(string(fileBytes)).Render(hamlScope)
+          hamlEngine, _ := gohaml.NewEngine(string(fileBytes))
+          fileStr = hamlEngine.Render(hamlScope)
         }
 
         if templateSet == nil {
@@ -158,7 +160,7 @@ func (haml *hamlTemplateEngine) Refresh() *revel.Error {
 
     // If there was an error with the Funcs, set it and return immediately.
     if funcErr != nil {
-      compileError = funcErr.(*Error)
+      compileError = funcErr.(*revel.Error)
       haml.SetCompileError(compileError)
 
       return compileError
@@ -169,32 +171,4 @@ func (haml *hamlTemplateEngine) Refresh() *revel.Error {
   haml.SetTemplateSet(templateSet)
 
   return compileError
-}
-
-func (haml *hamlTemplateEngine) Template(name string) (revel.Template, error) {
-  // Lower case the file name to support case-insensitive matching
-  name = strings.ToLower(name)
-
-  if _, err := os.Stat(name); err != nil {
-    return nil, fmt.Errorf("Template %s not found.", name)
-  }
-
-  fileBytes, err := ioutil.ReadFile(name)
-  if err != nil {
-    return nil, fmt.Errorf("Template %s read failed.", name)
-  }
-
-  scope := make(map[string]interface{})
-  scope["lang"] = "HAML"
-  hamlEngine, _ := gohaml.NewEngine(string(fileBytes))
-
-  html := hamlEngine.Render(scope)
-
-  tmpl := template.New(name)
-  tmpl, err = tpl.Parse(html)
-  if err != nil {
-    return nil, fmt.Errorf("Template %s parsed error.", name)
-  }
-
-  return revel.GoTemplate{tmpl, revel.TemplateEnginer(haml)}, err
 }
